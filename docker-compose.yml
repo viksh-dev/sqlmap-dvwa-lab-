@@ -1,0 +1,51 @@
+version: "3.8"
+
+# ЛАБА ТОЛЬКО ДЛЯ ЛОКАЛЬНОГО/ИЗОЛИРОВАННОГО ИСПОЛЬЗОВАНИЯ.
+# Не публикуй порты наружу (0.0.0.0) на реальном сервере — DVWA намеренно уязвим.
+
+services:
+  # Цель: уязвимое веб-приложение
+  dvwa:
+    image: vulnerables/web-dvwa
+    container_name: dvwa
+    restart: unless-stopped
+    networks:
+      - lab
+    # порт наружу НЕ пробрасываем напрямую — доступ только через WAF (waf -> dvwa)
+    # для этапа 01 (проверка без WAF) временно можно раскомментировать:
+    # ports:
+    #   - "8080:80"
+
+  # WAF перед DVWA — для этапа 05 (обход WAF)
+  # ВАЖНО: имя образа и переменные окружения нужно сверить на Docker Hub
+  # перед первым запуском (docker pull owasp/modsecurity-crs) — тег/API могли измениться.
+  waf:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf
+    depends_on:
+      - dvwa
+    environment:
+      BACKEND: "http://dvwa:80"
+      PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+    ports:
+      - "8080:8080"
+    networks:
+      - lab
+    restart: unless-stopped
+
+  # Контейнер для запуска sqlmap — собирается из официального репозитория
+  # (см. sqlmap/Dockerfile), не тянется случайный сторонний образ с Docker Hub
+  sqlmap:
+    build: ./sqlmap
+    container_name: sqlmap
+    depends_on:
+      - waf
+    entrypoint: ["sleep", "infinity"]  # держим контейнер живым, команды даём через docker compose exec
+    networks:
+      - lab
+
+networks:
+  lab:
+    driver: bridge
