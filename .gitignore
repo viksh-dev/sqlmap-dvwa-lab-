@@ -1,0 +1,7 @@
+*.log
+*.tmp
+dumps/
+output/
+.env
+.DS_Store
+Thumbs.db
